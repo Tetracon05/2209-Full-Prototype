@@ -1,0 +1,21 @@
+# Core UI
+customtkinter>=5.2.0
+
+# Data
+pandas>=2.0.0
+numpy>=1.24.0
+scikit-learn>=1.3.0
+
+# Deep Learning
+tensorflow>=2.13.0
+
+# Signal Decomposition
+EMD-signal>=1.5.0
+vmdpy>=0.2
+
+# Visualization
+matplotlib>=3.7.0
+Pillow>=10.0.0
+
+# Reporting
+reportlab>=4.0.4
