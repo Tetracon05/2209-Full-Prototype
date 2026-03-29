@@ -32,6 +32,8 @@ class CustomModelTab(ctk.CTkFrame):
         self._model = None
         self._train_loss = []
         self._val_loss   = []
+        self._inputs = []
+
         self._build_ui()
 
     # ------------------------------------------------------------------
@@ -71,11 +73,11 @@ class CustomModelTab(ctk.CTkFrame):
         chart_frame.grid_rowconfigure(0, weight=1)
 
         self.fig = Figure(figsize=(5, 3.5), dpi=96)
-        self.fig.patch.set_facecolor("#1e1e2e")
         self.ax  = self.fig.add_subplot(111)
         self._style_axes(self.ax)
         self.canvas = FigureCanvasTkAgg(self.fig, master=chart_frame)
         self.canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+        self._set_canvas_bg()
 
         # Status + progress
         self.status_var = ctk.StringVar(value="Add layers and click 'Build & Train'.")
@@ -92,7 +94,7 @@ class CustomModelTab(ctk.CTkFrame):
             parent, text=t, font=("Segoe UI Bold", 12), anchor="w"
         ).pack(fill="x", padx=4, pady=(pt, 2))
 
-        lbl("➕  Add Layer", pt=4)
+        lbl("Add Layer", pt=4)
 
         # Layer type dropdown
         self.layer_type_var = ctk.StringVar(value="Conv1D")
@@ -109,16 +111,24 @@ class CustomModelTab(ctk.CTkFrame):
         self._param_widgets = {}
         self._build_conv1d_params()   # default view
 
-        ctk.CTkButton(parent, text="➕ Add Layer",
-                      command=self._add_layer).pack(fill="x", padx=4, pady=4)
-        ctk.CTkButton(parent, text="❌ Remove Last",
-                      fg_color="#c5221f", hover_color="#a50e0e",
-                      command=self._remove_last).pack(fill="x", padx=4, pady=2)
-        ctk.CTkButton(parent, text="🗑  Clear All",
-                      fg_color="#5f6368", hover_color="#3c4043",
-                      command=self._clear_all).pack(fill="x", padx=4, pady=2)
+        btn_add = ctk.CTkButton(parent, text="Add Layer",
+                      command=self._add_layer)
+        btn_add.pack(fill="x", padx=4, pady=4)
+        self._inputs.append(btn_add)
+        
+        btn_rm = ctk.CTkButton(parent, text="Remove Last",
+                      fg_color=("gray40", "gray30"), hover_color=("gray25", "gray15"),
+                      command=self._remove_last)
+        btn_rm.pack(fill="x", padx=4, pady=2)
+        self._inputs.append(btn_rm)
+        
+        btn_clear = ctk.CTkButton(parent, text="Clear All",
+                      fg_color=("gray50", "gray40"), hover_color=("gray35", "gray25"),
+                      command=self._clear_all)
+        btn_clear.pack(fill="x", padx=4, pady=2)
+        self._inputs.append(btn_clear)
 
-        lbl("⚙️  Training Settings")
+        lbl("Training Settings")
         self.epochs_var = ctk.IntVar(value=20)
         self.batch_var  = ctk.IntVar(value=32)
         self.lr_var     = ctk.IntVar(value=10)
@@ -127,22 +137,49 @@ class CustomModelTab(ctk.CTkFrame):
             f = ctk.CTkFrame(parent, fg_color="transparent")
             f.pack(fill="x", padx=4, pady=1)
             ctk.CTkLabel(f, text=label, width=80, anchor="w").pack(side="left")
-            ctk.CTkSlider(f, from_=lo, to=hi, number_of_steps=steps,
-                          variable=var).pack(side="left", fill="x", expand=True)
-            ctk.CTkLabel(f, textvariable=var, width=40).pack(side="left")
+            
+            entry_str = ctk.StringVar(value=str(var.get()))
+            entry = ctk.CTkEntry(f, textvariable=entry_str, width=45)
+            entry.pack(side="right", padx=(4, 0))
+            self._inputs.append(entry)
+            
+            slider = ctk.CTkSlider(f, from_=lo, to=hi, number_of_steps=steps, variable=var)
+            slider.pack(side="left", fill="x", expand=True)
+            self._inputs.append(slider)
+
+            def on_slide(val):
+                entry_str.set(str(int(float(val))))
+            slider.configure(command=on_slide)
+
+            def on_entry(event=None):
+                try:
+                    v = int(entry_str.get())
+                    v = max(lo, min(v, hi))
+                    entry_str.set(str(v))
+                    var.set(v)
+                    slider.set(v)
+                except ValueError:
+                    entry_str.set(str(var.get()))
+                    
+            entry.bind("<Return>", on_entry)
+            entry.bind("<FocusOut>", on_entry)
 
         _row("Epochs", self.epochs_var, 5, 100, 19)
         _row("Batch ", self.batch_var,  8, 256, 30)
         _row("LR×1e4", self.lr_var,     1, 100, 99)
 
-        ctk.CTkButton(parent, text="🔨  Build & Train",
-                      fg_color="#1a73e8", hover_color="#1558b0",
+        self.btn_train = ctk.CTkButton(parent, text="Build & Train",
+                      fg_color=("gray60", "gray40"), hover_color=("gray45", "gray25"),
                       font=("Segoe UI Bold", 13),
-                      command=self._build_and_train).pack(fill="x", padx=4, pady=(16, 2))
+                      command=self._build_and_train)
+        self.btn_train.pack(fill="x", padx=4, pady=(16, 2))
+        self._inputs.append(self.btn_train)
 
-        ctk.CTkButton(parent, text="⏹  Stop",
-                      fg_color="#5f6368", hover_color="#3c4043",
-                      command=self._stop).pack(fill="x", padx=4, pady=2)
+        self.btn_stop = ctk.CTkButton(parent, text="Stop",
+                      fg_color=("gray40", "gray30"), hover_color=("gray25", "gray15"),
+                      command=self._stop)
+        self.btn_stop.pack(fill="x", padx=4, pady=2)
+        self._inputs.append(self.btn_stop)
 
     # ------------------------------------------------------------------
     # Parameter widget builder helpers
@@ -248,13 +285,30 @@ class CustomModelTab(ctk.CTkFrame):
     # Build + Train
     # ------------------------------------------------------------------
     def _build_and_train(self):
+        if len(self.builder.layer_specs) == 0:
+            messagebox.showwarning("Empty Model", "Please add at least one layer.")
+            return
         if not self.state.get("data_ready"):
             messagebox.showwarning("No Data", "Run Phase 1 first.")
             return
-        if not self.builder.layer_specs:
-            messagebox.showwarning("No Layers", "Add at least one layer.")
-            return
+        
+        app = self.winfo_toplevel()
+        if hasattr(app, "set_tabs_locked"):
+            app.set_tabs_locked(True)
+        self.set_locked(True)
+        
+        threading.Thread(target=self._run_training, daemon=True).start()
 
+    def _run_training(self):
+        try:
+            self._do_run_training()
+        finally:
+            self.after(0, lambda: self.set_locked(False))
+            app = self.winfo_toplevel()
+            if hasattr(app, "set_tabs_locked"):
+                self.after(0, lambda: app.set_tabs_locked(False))
+
+    def _do_run_training(self):
         proc = self.state["processor"]
         X_tr, y_tr, X_v, y_v, X_te, y_te = proc.get_scaled_splits()
         self.state["X_test_scaled"] = X_te
@@ -266,7 +320,7 @@ class CustomModelTab(ctk.CTkFrame):
         try:
             self._model = self.builder.build((1, n_features), lr=lr)
         except Exception as exc:
-            messagebox.showerror("Build Error", str(exc))
+            self.after(0, lambda: messagebox.showerror("Build Error", str(exc)))
             return
 
         self.state["model"] = self._model
@@ -276,7 +330,7 @@ class CustomModelTab(ctk.CTkFrame):
         self._val_loss.clear()
         total = self.epochs_var.get()
 
-        self.status_var.set("Training custom model…")
+        self.after(0, lambda: self.status_var.set("Training custom model…"))
 
         def on_epoch(epoch, logs):
             self._train_loss.append(logs.get("loss", 0))
@@ -290,7 +344,7 @@ class CustomModelTab(ctk.CTkFrame):
 
         def on_done(_):
             self.after(0, lambda: self.status_var.set(
-                "✅ Custom model trained. Go to Phase 4 to evaluate."
+                "Custom model trained. Go to Phase 4 to evaluate."
             ))
             self.after(0, lambda: self.progress.set(1.0))
 
@@ -309,22 +363,43 @@ class CustomModelTab(ctk.CTkFrame):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+    def set_locked(self, locked: bool):
+        state = "disabled" if locked else "normal"
+        for w in self._inputs:
+            try: w.configure(state=state)
+            except Exception: pass
+
     def _update_chart(self):
         self.ax.clear()
         self._style_axes(self.ax)
         e = range(1, len(self._train_loss) + 1)
-        self.ax.plot(e, self._train_loss, color="#1a73e8", label="Train Loss")
-        self.ax.plot(e, self._val_loss,   color="#fbbc04", label="Val Loss")
-        self.ax.set_xlabel("Epoch", color="#c9d1d9", fontsize=9)
-        self.ax.set_title("Custom Model — Training Loss", color="#c9d1d9", fontsize=10)
-        self.ax.legend(facecolor="#1e1e2e", edgecolor="#30363d",
-                       labelcolor="#c9d1d9", fontsize=8)
+        self.ax.plot(e, self._train_loss, color="#9e9e9e", label="Train Loss")
+        if self._val_loss:
+            self.ax.plot(e, self._val_loss, label="Validation", color="#757575", linewidth=1.5)
+            
+        self.ax.set_xlabel("Epoch", color="#7f7f7f", fontsize=9)
+        self.ax.set_ylabel("Loss (MSE)", color="#7f7f7f", fontsize=9)
+        self.ax.set_title("Training Progress", color="#7f7f7f", fontsize=10, pad=8)
+        self.ax.legend(facecolor="#2b2b2b", edgecolor="#7f7f7f",
+                       labelcolor="#e0e0e0", fontsize=8)
         self.fig.tight_layout()
         self.canvas.draw()
 
+    def _set_canvas_bg(self, mode=None):
+        if mode is None:
+            import customtkinter as ctk
+            mode = ctk.get_appearance_mode()
+        bg = "#1e1e2e" if mode == "Dark" else "#e5e5e5"
+        self.fig.patch.set_facecolor(bg)
+        self.canvas.get_tk_widget().configure(bg=bg)
+        self.canvas.draw()
+
+    def update_theme(self, mode):
+        self._set_canvas_bg(mode)
+
     @staticmethod
     def _style_axes(ax):
-        ax.set_facecolor("#12121f")
-        ax.tick_params(colors="#c9d1d9", labelsize=8)
+        ax.set_facecolor("none")
+        ax.tick_params(colors="#7f7f7f", labelsize=8)
         for spine in ax.spines.values():
-            spine.set_edgecolor("#30363d")
+            spine.set_edgecolor("#7f7f7f")

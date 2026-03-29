@@ -92,7 +92,9 @@ class DataProcessor:
 
         Returns number of rows after cleaning.
         """
-        df = self.df.copy()
+        if self.df_raw is None:
+            raise ValueError("No data loaded.")
+        df = self.df_raw.copy()
         if strategy == "drop":
             df.dropna(inplace=True)
         elif strategy == "mean":
@@ -162,11 +164,30 @@ class DataProcessor:
         return new_cols
 
     # ------------------------------------------------------------------
+    # 5.5 Circshift Augmentation
+    # ------------------------------------------------------------------
+    def add_circshift_augmentation(self, shift_steps: int):
+        """
+        Doubles the dataset by circularly shifting all rows by `shift_steps`
+        and appending them to the bottom, effectively acting as Data Augmentation.
+        A shift of 0 does nothing.
+        """
+        if shift_steps <= 0:
+            return
+        
+        df_shifted = self.df.copy()
+        for col in df_shifted.columns:
+            df_shifted[col] = np.roll(df_shifted[col].values, shift=shift_steps)
+            
+        self.df = pd.concat([self.df, df_shifted], ignore_index=True)
+
+    # ------------------------------------------------------------------
     # 6. Split
     # ------------------------------------------------------------------
     def split(self, feature_cols: list = None,
               train_ratio: float = 0.70,
-              val_ratio: float = 0.15) -> dict:
+              val_ratio: float = 0.15,
+              horizon: int = 1) -> dict:
         """
         Chronological (time-ordered) 70/15/15 split.
 
@@ -175,6 +196,7 @@ class DataProcessor:
         feature_cols : columns to use as X; defaults to DEFAULT_FEATURES ∩ df.columns
         train_ratio  : fraction for training set
         val_ratio    : fraction for validation set (remainder = test)
+        horizon      : Steps ahead to predict. 0 = current step, 1 = next step, etc.
 
         Returns dict with split sizes.
         """
@@ -188,8 +210,17 @@ class DataProcessor:
 
         self.feature_cols = [c for c in feature_cols if c in self.df.columns]
 
-        X = self.df[self.feature_cols].values.astype(np.float32)
-        y = self.df[TARGET_COL].values.astype(np.float32).reshape(-1, 1)
+        df_work = self.df.copy()
+        target_name = TARGET_COL
+        
+        # Shift target backwards by horizon steps for forecasting
+        if horizon > 0:
+            target_name = f"{TARGET_COL}_horizon_{horizon}"
+            df_work[target_name] = df_work[TARGET_COL].shift(-horizon)
+            df_work.dropna(subset=[target_name], inplace=True)
+
+        X = df_work[self.feature_cols].values.astype(np.float32)
+        y = df_work[target_name].values.astype(np.float32).reshape(-1, 1)
 
         n = len(X)
         i_train = int(n * train_ratio)

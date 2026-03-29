@@ -1,0 +1,34 @@
+# Environments
+.env
+.venv
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Models and Weights
+*.h5
+*.hdf5
+*.keras
+*.pt
+*.pth
+*.pkl
+
+# Data and CSV Tracking
+*.csv
+*.xlsx
+data/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# IDE specific
+.vscode/
+.idea/
+.spyderproject

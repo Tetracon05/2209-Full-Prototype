@@ -34,6 +34,7 @@ class EvaluationTab(ctk.CTkFrame):
         self._y_pred = None
         self._metrics = {}
         self._fig = None
+        self._inputs = []
         self._build_ui()
 
     # ------------------------------------------------------------------
@@ -48,18 +49,24 @@ class EvaluationTab(ctk.CTkFrame):
         bar.grid(row=0, column=0, sticky="ew", padx=8, pady=(8, 4))
         bar.grid_columnconfigure(5, weight=1)
 
-        ctk.CTkButton(bar, text="⚡  Evaluate on Test Set",
-                      fg_color="#1a73e8", hover_color="#1558b0",
+        btn_eval = ctk.CTkButton(bar, text="Evaluate on Test Set",
+                      fg_color=("gray60", "gray40"), hover_color=("gray45", "gray25"),
                       font=("Segoe UI Bold", 13),
-                      command=self._run_evaluation).pack(side="left", padx=8, pady=8)
+                      command=self._run_evaluation)
+        btn_eval.pack(side="left", padx=8, pady=8)
+        self._inputs.append(btn_eval)
 
-        ctk.CTkButton(bar, text="💾  Export CSV",
-                      fg_color="#188038", hover_color="#0d652d",
-                      command=self._export_csv).pack(side="left", padx=4, pady=8)
+        btn_csv = ctk.CTkButton(bar, text="Export CSV",
+                      fg_color=("gray50", "gray40"), hover_color=("gray35", "gray25"),
+                      command=self._export_csv)
+        btn_csv.pack(side="left", padx=4, pady=8)
+        self._inputs.append(btn_csv)
 
-        ctk.CTkButton(bar, text="📄  Export PDF",
-                      fg_color="#e37400", hover_color="#b06000",
-                      command=self._export_pdf).pack(side="left", padx=4, pady=8)
+        btn_pdf = ctk.CTkButton(bar, text="Export PDF",
+                      fg_color=("gray40", "gray30"), hover_color=("gray25", "gray15"),
+                      command=self._export_pdf)
+        btn_pdf.pack(side="left", padx=4, pady=8)
+        self._inputs.append(btn_pdf)
 
         self.status_var = ctk.StringVar(value="Train a model in Phase 2 or 3 first.")
         ctk.CTkLabel(bar, textvariable=self.status_var,
@@ -71,27 +78,15 @@ class EvaluationTab(ctk.CTkFrame):
         cards.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
         self._metric_labels = {}
-        # Card background colors — explicit dark tints (Tkinter needs 6-digit hex)
-        card_bg = {
-            "R":    "#0d1f3c",
-            "RMSE": "#3c0e0b",
-            "MAE":  "#3c2e00",
-            "MAPE": "#0b2e14",
-        }
-        for col, (name, color) in enumerate([
-            ("R",    "#1a73e8"),
-            ("RMSE", "#ea4335"),
-            ("MAE",  "#fbbc04"),
-            ("MAPE", "#34a853"),
-        ]):
+        for col, name in enumerate(["R", "RMSE", "MAE", "MAPE"]):
             card = ctk.CTkFrame(cards, corner_radius=10,
-                                fg_color=card_bg[name],
-                                border_color=color, border_width=1)
+                                fg_color=("gray90", "#242424"),
+                                border_color=("gray70", "#4d4d4d"), border_width=1)
             card.grid(row=0, column=col, sticky="nsew", padx=6, pady=6)
             ctk.CTkLabel(card, text=name, font=("Segoe UI Bold", 13),
-                         text_color=color).pack(pady=(10, 2))
+                         text_color=("black", "white")).pack(pady=(10, 2))
             val_lbl = ctk.CTkLabel(card, text="—",
-                                   font=("Segoe UI Bold", 20), text_color=color)
+                                   font=("Segoe UI Bold", 20), text_color=("black", "white"))
             val_lbl.pack(pady=(0, 10))
             self._metric_labels[name] = val_lbl
 
@@ -103,26 +98,49 @@ class EvaluationTab(ctk.CTkFrame):
         self.grid_rowconfigure(2, weight=1)
 
         self._fig = Figure(figsize=(8, 4), dpi=96)
-        self._fig.patch.set_facecolor("#1e1e2e")
         self._ax = self._fig.add_subplot(111)
         self._style_axes(self._ax)
         self._ax.set_title("Actual vs Predicted Power Output",
-                           color="#c9d1d9", fontsize=11)
+                           color="#7f7f7f", fontsize=11)
 
         self.canvas = FigureCanvasTkAgg(self._fig, master=chart_frame)
         self.canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew",
                                           padx=4, pady=4)
+        self._set_canvas_bg()
 
         # ── Zoom controls ────────────────────────────────────────────────
         zoom_bar = ctk.CTkFrame(chart_frame, fg_color="transparent")
         zoom_bar.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 4))
         ctk.CTkLabel(zoom_bar, text="Show last N samples:").pack(side="left", padx=4)
         self.zoom_var = ctk.IntVar(value=500)
-        ctk.CTkSlider(zoom_bar, from_=50, to=5000, number_of_steps=99,
-                      variable=self.zoom_var,
-                      command=lambda _: self._redraw_chart()).pack(
-            side="left", fill="x", expand=True, padx=4)
-        ctk.CTkLabel(zoom_bar, textvariable=self.zoom_var, width=55).pack(side="left")
+        
+        entry_str = ctk.StringVar(value=str(self.zoom_var.get()))
+        entry = ctk.CTkEntry(zoom_bar, textvariable=entry_str, width=60)
+        entry.pack(side="right", padx=(4, 8))
+        self._inputs.append(entry)
+        
+        slider = ctk.CTkSlider(zoom_bar, from_=50, to=5000, number_of_steps=99, variable=self.zoom_var)
+        slider.pack(side="left", fill="x", expand=True, padx=4)
+        self._inputs.append(slider)
+        
+        def on_slide(val):
+            entry_str.set(str(int(float(val))))
+            self._redraw_chart()
+        slider.configure(command=on_slide)
+        
+        def on_entry(event=None):
+            try:
+                v = int(entry_str.get())
+                v = max(50, min(v, 5000))
+                entry_str.set(str(v))
+                self.zoom_var.set(v)
+                slider.set(v)
+                self._redraw_chart()
+            except ValueError:
+                entry_str.set(str(self.zoom_var.get()))
+                
+        entry.bind("<Return>", on_entry)
+        entry.bind("<FocusOut>", on_entry)
 
     # ------------------------------------------------------------------
     # Actions
@@ -137,7 +155,20 @@ class EvaluationTab(ctk.CTkFrame):
         if proc is None or not self.state.get("data_ready"):
             messagebox.showwarning("No Data", "Run Phase 1 first.")
             return
-
+            
+        app = self.winfo_toplevel()
+        if hasattr(app, "set_tabs_locked"):
+            app.set_tabs_locked(True)
+        self.set_locked(True)
+        try:
+            self._do_run_evaluation(model, proc)
+        finally:
+            app = self.winfo_toplevel()
+            if hasattr(app, "set_tabs_locked"):
+                app.set_tabs_locked(False)
+            self.set_locked(False)
+            
+    def _do_run_evaluation(self, model, proc):
         self.status_var.set("Running inference…")
 
         # Get scaled test split
@@ -162,7 +193,7 @@ class EvaluationTab(ctk.CTkFrame):
 
         model_name = self.state.get("active_model_name", "Model")
         self.status_var.set(
-            f"✅ {model_name} — R={self._metrics['R']:.4f}  "
+            f"{model_name} — R={self._metrics['R']:.4f}  "
             f"RMSE={self._metrics['RMSE']:.4f}  "
             f"MAE={self._metrics['MAE']:.4f}  "
             f"MAPE={self._metrics['MAPE']:.2f}%"
@@ -178,16 +209,16 @@ class EvaluationTab(ctk.CTkFrame):
 
         self._ax.clear()
         self._style_axes(self._ax)
-        self._ax.plot(xs, yt, color="#1a73e8", linewidth=1.0,
+        self._ax.plot(xs, yt, color="#c0c0c0", linewidth=1.0,
                       label="Actual",    alpha=0.9)
-        self._ax.plot(xs, yp, color="#ea4335", linewidth=1.0,
+        self._ax.plot(xs, yp, color="#757575", linewidth=1.0,
                       label="Predicted", alpha=0.9, linestyle="--")
-        self._ax.set_xlabel("Time Step", color="#c9d1d9", fontsize=9)
-        self._ax.set_ylabel("Active Power (W)", color="#c9d1d9", fontsize=9)
+        self._ax.set_xlabel("Time Step", color="#7f7f7f", fontsize=9)
+        self._ax.set_ylabel("Active Power (W)", color="#7f7f7f", fontsize=9)
         self._ax.set_title("Actual vs Predicted Power Output",
-                           color="#c9d1d9", fontsize=11)
-        self._ax.legend(facecolor="#1e1e2e", edgecolor="#30363d",
-                        labelcolor="#c9d1d9", fontsize=9)
+                           color="#7f7f7f", fontsize=11)
+        self._ax.legend(facecolor="#2b2b2b", edgecolor="#7f7f7f",
+                        labelcolor="#e0e0e0", fontsize=9)
         self._fig.tight_layout()
         self.canvas.draw()
 
@@ -239,9 +270,27 @@ class EvaluationTab(ctk.CTkFrame):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+    def set_locked(self, locked: bool):
+        state = "disabled" if locked else "normal"
+        for w in self._inputs:
+            try: w.configure(state=state)
+            except Exception: pass
+
+    def _set_canvas_bg(self, mode=None):
+        if mode is None:
+            import customtkinter as ctk
+            mode = ctk.get_appearance_mode()
+        bg = "#1e1e2e" if mode == "Dark" else "#e5e5e5"
+        self._fig.patch.set_facecolor(bg)
+        self.canvas.get_tk_widget().configure(bg=bg)
+        self.canvas.draw()
+
+    def update_theme(self, mode):
+        self._set_canvas_bg(mode)
+
     @staticmethod
     def _style_axes(ax):
-        ax.set_facecolor("#12121f")
-        ax.tick_params(colors="#c9d1d9", labelsize=8)
+        ax.set_facecolor("none")
+        ax.tick_params(colors="#7f7f7f", labelsize=8)
         for spine in ax.spines.values():
-            spine.set_edgecolor("#30363d")
+            spine.set_edgecolor("#7f7f7f")

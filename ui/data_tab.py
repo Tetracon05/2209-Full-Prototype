@@ -32,6 +32,7 @@ class DataTab(ctk.CTkFrame):
         self.state = state          # shared app-level state dict
         self.processor = DataProcessor()
         self.state["processor"] = self.processor
+        self._inputs = []
 
         self._build_ui()
 
@@ -65,11 +66,11 @@ class DataTab(ctk.CTkFrame):
         chart_frame.grid_rowconfigure(0, weight=1)
 
         self.fig = Figure(figsize=(6, 3.5), dpi=96)
-        self.fig.patch.set_facecolor("#1e1e2e")
         self.ax = self.fig.add_subplot(111)
         self._style_axes(self.ax)
         self.canvas = FigureCanvasTkAgg(self.fig, master=chart_frame)
         self.canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+        self._set_canvas_bg()
 
         # Status label
         self.status_var = ctk.StringVar(value="Ready — load a CSV file to begin.")
@@ -85,52 +86,89 @@ class DataTab(ctk.CTkFrame):
         ).pack(fill="x", padx=4, pady=(pad_top, 2))
 
         # Section: Load
-        lbl("📂  Load Dataset", pad_top=4)
-        ctk.CTkButton(parent, text="Browse CSV…",
-                      command=self._load_csv).pack(fill="x", padx=4, pady=2)
+        lbl("Load Dataset", pad_top=4)
+        btn_load = ctk.CTkButton(parent, text="Browse CSV…",
+                      command=self._load_csv)
+        btn_load.pack(fill="x", padx=4, pady=2)
+        self._inputs.append(btn_load)
+        
         self.lbl_file = ctk.CTkLabel(parent, text="No file loaded",
                                       font=("Segoe UI", 10),
                                       text_color="gray", wraplength=230, anchor="w")
         self.lbl_file.pack(fill="x", padx=4)
 
         # Section: Cleaning
-        lbl("🧹  Missing Values Strategy")
+        lbl("Missing Values Strategy")
         self.clean_var = ctk.StringVar(value="drop")
         for opt in ("drop", "mean", "ffill"):
-            ctk.CTkRadioButton(parent, text=opt, variable=self.clean_var,
-                               value=opt).pack(anchor="w", padx=16, pady=1)
+            btn_clean = ctk.CTkRadioButton(parent, text=opt, variable=self.clean_var,
+                               value=opt)
+            btn_clean.pack(anchor="w", padx=16, pady=1)
+            self._inputs.append(btn_clean)
+
+        def _slider(label_txt, var, lo, hi, steps):
+            lbl(label_txt, pad_top=8)
+            f = ctk.CTkFrame(parent, fg_color="transparent")
+            f.pack(fill="x", padx=4, pady=2)
+            
+            entry_str = ctk.StringVar(value=str(var.get()))
+            entry = ctk.CTkEntry(f, textvariable=entry_str, width=40)
+            entry.pack(side="right", padx=(4, 0))
+            self._inputs.append(entry)
+            
+            slider = ctk.CTkSlider(f, from_=lo, to=hi, number_of_steps=steps, variable=var)
+            slider.pack(side="left", fill="x", expand=True)
+            self._inputs.append(slider)
+            
+            def on_slide(val):
+                entry_str.set(str(int(float(val))))
+            slider.configure(command=on_slide)
+            
+            def on_entry(event=None):
+                try:
+                    v = int(entry_str.get())
+                    v = max(lo, min(v, hi))
+                    entry_str.set(str(v))
+                    var.set(v)
+                    slider.set(v)
+                except ValueError:
+                    entry_str.set(str(var.get()))
+            
+            entry.bind("<Return>", on_entry)
+            entry.bind("<FocusOut>", on_entry)
 
         # Section: Correlation top_n
-        lbl("📊  Top-N Correlation Features")
         self.topn_var = ctk.IntVar(value=7)
-        ctk.CTkSlider(parent, from_=3, to=15, number_of_steps=12,
-                      variable=self.topn_var).pack(fill="x", padx=4, pady=2)
-        ctk.CTkLabel(parent, textvariable=self.topn_var).pack()
+        _slider("Top-N Correlation Features", self.topn_var, 3, 15, 12)
 
         # Section: Lag features
-        lbl("⏱  Lag Window (steps)")
         self.lag_var = ctk.IntVar(value=3)
-        ctk.CTkSlider(parent, from_=0, to=10, number_of_steps=10,
-                      variable=self.lag_var).pack(fill="x", padx=4, pady=2)
-        ctk.CTkLabel(parent, textvariable=self.lag_var).pack()
+        _slider("Lag Window (steps)", self.lag_var, 0, 10, 10)
 
         # Section: Decomposition
-        lbl("🌊  Decomposition Method")
+        lbl("Decomposition Method")
         self.decomp_var = ctk.StringVar(value="EMD")
-        ctk.CTkOptionMenu(parent, values=["None", "EMD", "EEMD", "CEEMDAN", "VMD"],
-                          variable=self.decomp_var).pack(fill="x", padx=4, pady=2)
+        menu_decomp = ctk.CTkOptionMenu(parent, values=["None", "EMD", "EEMD", "CEEMDAN", "VMD"],
+                          variable=self.decomp_var)
+        menu_decomp.pack(fill="x", padx=4, pady=2)
+        self._inputs.append(menu_decomp)
 
-        lbl("   # IMF Components")
         self.imf_var = ctk.IntVar(value=5)
-        ctk.CTkSlider(parent, from_=2, to=12, number_of_steps=10,
-                      variable=self.imf_var).pack(fill="x", padx=4, pady=2)
-        ctk.CTkLabel(parent, textvariable=self.imf_var).pack()
+        _slider("   # IMF Components", self.imf_var, 2, 12, 10)
+
+        self.horizon_var = ctk.IntVar(value=1)
+        _slider("Forecast Horizon (steps)", self.horizon_var, 0, 72, 72)
+
+        self.circshift_var = ctk.IntVar(value=0)
+        _slider("Circshift Augmentation (steps)", self.circshift_var, 0, 48, 48)
 
         # Action button
-        ctk.CTkButton(parent, text="⚡  Process Data",
-                      fg_color="#1a73e8", hover_color="#1558b0",
+        btn_action = ctk.CTkButton(parent, text="Process Data",
+                      fg_color=("gray60", "gray40"), hover_color=("gray45", "gray25"),
                       font=("Segoe UI Bold", 13),
-                      command=self._process_data).pack(fill="x", padx=4, pady=(18, 4))
+                      command=self._process_data)
+        btn_action.pack(fill="x", padx=4, pady=(18, 4))
+        self._inputs.append(btn_action)
 
         self.progress = ctk.CTkProgressBar(parent)
         self.progress.set(0)
@@ -161,10 +199,25 @@ class DataTab(ctk.CTkFrame):
         if not self.state.get("data_loaded"):
             messagebox.showwarning("No Data", "Please load a CSV file first.")
             return
+        
+        app = self.winfo_toplevel()
+        if hasattr(app, "set_tabs_locked"):
+            app.set_tabs_locked(True)
+        self.set_locked(True)
+        
         threading.Thread(target=self._run_pipeline, daemon=True).start()
 
     def _run_pipeline(self):
         """Full processing pipeline executed in a background thread."""
+        try:
+            self._do_run_pipeline()
+        finally:
+            self.after(0, lambda: self.set_locked(False))
+            app = self.winfo_toplevel()
+            if hasattr(app, "set_tabs_locked"):
+                self.after(0, lambda: app.set_tabs_locked(False))
+
+    def _do_run_pipeline(self):
         self._set_progress(0.05)
         self.status_var.set("Cleaning data…")
 
@@ -203,9 +256,16 @@ class DataTab(ctk.CTkFrame):
                     "Decomposition Error", str(e)))
         self._set_progress(0.70)
 
+        # 4.5 Circshift
+        c_steps = self.circshift_var.get()
+        if c_steps > 0:
+            self.status_var.set(f"Applying Circshift Augmentation ({c_steps} steps)…")
+            self.processor.add_circshift_augmentation(c_steps)
+
         # 5. Split
         self.status_var.set("Splitting dataset (70/15/15)…")
-        info = self.processor.split()
+        horizon = self.horizon_var.get()
+        info = self.processor.split(horizon=horizon)
         self.state["split_info"] = info
         self.state["data_ready"] = True
         self._set_progress(1.0)
@@ -220,18 +280,28 @@ class DataTab(ctk.CTkFrame):
         ]
         self.after(0, lambda: self._append_info("\n".join(lines)))
         self.status_var.set(
-            f"✅ Done — {info['train']+info['val']+info['test']:,} samples ready."
+            f"Done — {info['train']+info['val']+info['test']:,} samples ready."
         )
 
-    def _draw_correlation(self, corr):
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+    def set_locked(self, locked: bool):
+        state = "disabled" if locked else "normal"
+        for w in self._inputs:
+            try: w.configure(state=state)
+            except Exception: pass
+
+    def _set_progress(self, val: float):
         """Redraw the correlation bar chart on the embedded figure."""
         self.ax.clear()
         self._style_axes(self.ax)
-        colors_ = ["#1a73e8" if v >= 0 else "#ea4335" for v in corr.values]
+        colors_ = ["#757575" if v >= 0 else "#424242" for v in corr.values]
         self.ax.barh(corr.index[::-1], corr.values[::-1], color=colors_[::-1])
         self.ax.set_xlabel("Absolute Correlation with Active_Power",
-                           color="#c9d1d9", fontsize=9)
-        self.ax.set_title("Feature Correlation", color="#c9d1d9", fontsize=10, pad=8)
+                           color="#7f7f7f", fontsize=9)
+        self.ax.set_ylabel("Features", color="#7f7f7f", fontsize=9)
+        self.ax.set_title("Feature Correlation", color="#7f7f7f", fontsize=10, pad=8)
         self.fig.tight_layout()
         self.canvas.draw()
 
@@ -257,9 +327,21 @@ class DataTab(ctk.CTkFrame):
         self.info_box.insert("end", "\n" + text)
         self.info_box.configure(state="disabled")
 
+    def _set_canvas_bg(self, mode=None):
+        if mode is None:
+            import customtkinter as ctk
+            mode = ctk.get_appearance_mode()
+        bg = "#1e1e2e" if mode == "Dark" else "#e5e5e5"
+        self.fig.patch.set_facecolor(bg)
+        self.canvas.get_tk_widget().configure(bg=bg)
+        self.canvas.draw()
+
+    def update_theme(self, mode):
+        self._set_canvas_bg(mode)
+
     @staticmethod
     def _style_axes(ax):
-        ax.set_facecolor("#12121f")
-        ax.tick_params(colors="#c9d1d9", labelsize=8)
+        ax.set_facecolor("none")
+        ax.tick_params(colors="#7f7f7f", labelsize=8)
         for spine in ax.spines.values():
-            spine.set_edgecolor("#30363d")
+            spine.set_edgecolor("#7f7f7f")
