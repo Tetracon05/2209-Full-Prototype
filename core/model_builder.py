@@ -15,10 +15,12 @@ import threading
 # ---------------------------------------------------------------------------
 def _tf():
     import tensorflow as tf
+    # Turn off JIT compiler globally to be extra safe against XLA crashes
+    tf.config.optimizer.set_jit(False)
     return tf
 
 def _keras():
-    import tensorflow as tf
+    tf = _tf()
     return tf.keras
 
 
@@ -34,9 +36,9 @@ def build_alexnet_1d(input_shape: tuple, output_units: int = 1) -> "tf.keras.Mod
     keras = _keras()
     inp = keras.Input(shape=input_shape)
     x = keras.layers.Conv1D(96, 11, strides=4, padding="same", activation="relu")(inp)
-    x = keras.layers.MaxPooling1D(3, strides=2)(x)
+    x = keras.layers.MaxPooling1D(3, strides=2, padding="same")(x)
     x = keras.layers.Conv1D(256, 5, padding="same", activation="relu")(x)
-    x = keras.layers.MaxPooling1D(3, strides=2)(x)
+    x = keras.layers.MaxPooling1D(3, strides=2, padding="same")(x)
     x = keras.layers.Conv1D(384, 3, padding="same", activation="relu")(x)
     x = keras.layers.Conv1D(384, 3, padding="same", activation="relu")(x)
     x = keras.layers.Conv1D(256, 3, padding="same", activation="relu")(x)
@@ -154,19 +156,19 @@ def build_vgg16_1d(input_shape: tuple, output_units: int = 1) -> "tf.keras.Model
     # Block 1
     x = keras.layers.Conv1D(64, 3, padding="same", activation="relu")(x)
     x = keras.layers.Conv1D(64, 3, padding="same", activation="relu")(x)
-    x = keras.layers.MaxPooling1D(2)(x)
+    x = keras.layers.MaxPooling1D(2, padding="same")(x)
     # Block 2
     x = keras.layers.Conv1D(128, 3, padding="same", activation="relu")(x)
     x = keras.layers.Conv1D(128, 3, padding="same", activation="relu")(x)
-    x = keras.layers.MaxPooling1D(2)(x)
+    x = keras.layers.MaxPooling1D(2, padding="same")(x)
     # Block 3
     for _ in range(3):
         x = keras.layers.Conv1D(256, 3, padding="same", activation="relu")(x)
-    x = keras.layers.MaxPooling1D(2)(x)
+    x = keras.layers.MaxPooling1D(2, padding="same")(x)
     # Block 4
     for _ in range(3):
         x = keras.layers.Conv1D(512, 3, padding="same", activation="relu")(x)
-    x = keras.layers.MaxPooling1D(2)(x)
+    x = keras.layers.MaxPooling1D(2, padding="same")(x)
     # Block 5
     for _ in range(3):
         x = keras.layers.Conv1D(512, 3, padding="same", activation="relu")(x)
@@ -193,16 +195,16 @@ def build_squeezenet_1d(input_shape: tuple, output_units: int = 1) -> "tf.keras.
 
     inp = keras.Input(shape=input_shape)
     x = keras.layers.Conv1D(96, 7, strides=2, padding="same", activation="relu")(inp)
-    x = keras.layers.MaxPooling1D(3, strides=2)(x)
+    x = keras.layers.MaxPooling1D(3, strides=2, padding="same")(x)
     x = fire_module(x, 16, 64)
     x = fire_module(x, 16, 64)
     x = fire_module(x, 32, 128)
-    x = keras.layers.MaxPooling1D(3, strides=2)(x)
+    x = keras.layers.MaxPooling1D(3, strides=2, padding="same")(x)
     x = fire_module(x, 32, 128)
     x = fire_module(x, 48, 192)
     x = fire_module(x, 48, 192)
     x = fire_module(x, 64, 256)
-    x = keras.layers.MaxPooling1D(3, strides=2)(x)
+    x = keras.layers.MaxPooling1D(3, strides=2, padding="same")(x)
     x = fire_module(x, 64, 256)
     x = keras.layers.Dropout(0.5)(x)
     x = keras.layers.Conv1D(output_units, 1, padding="same")(x)
@@ -228,7 +230,7 @@ def get_model(name: str, input_shape: tuple) -> "tf.keras.Model":
     if name not in MODEL_REGISTRY:
         raise ValueError(f"Unknown model '{name}'. Choose from {list(MODEL_REGISTRY)}")
     model = MODEL_REGISTRY[name](input_shape)
-    model.compile(optimizer="adam", loss="mse", metrics=["mae"])
+    model.compile(optimizer="adam", loss="mse", metrics=["mae"], jit_compile=False)
     return model
 
 
@@ -312,7 +314,8 @@ class CustomModelBuilder:
         model.compile(
             optimizer=keras.optimizers.Adam(learning_rate=lr),
             loss="mse",
-            metrics=["mae"]
+            metrics=["mae"],
+            jit_compile=False
         )
         return model
 

@@ -75,8 +75,10 @@ class PretrainedTab(ctk.CTkFrame):
 
         # Model selection
         lbl("Model Architecture")
-        self.model_var = ctk.StringVar(value="LSTM")
-        menu_model = ctk.CTkOptionMenu(parent, values=["LSTM", "GRU", "1D-CNN", "Transformer"],
+        model_names = list(MODEL_REGISTRY.keys())
+        initial_value = model_names[0] if model_names else "Custom"
+        self.model_var = ctk.StringVar(value=initial_value)
+        menu_model = ctk.CTkOptionMenu(parent, values=model_names,
                           variable=self.model_var)
         menu_model.pack(fill="x", padx=4, pady=2)
         self._inputs.append(menu_model)
@@ -254,10 +256,14 @@ class PretrainedTab(ctk.CTkFrame):
 
     def _training_finished(self):
         self.progress.set(1.0)
-        self.status_var.set(
-            f"Training complete — {self._epochs_done} epochs. "
-            "Go to Phase 4 to evaluate."
-        )
+        if hasattr(self.trainer, "error") and self.trainer.error:
+            self.status_var.set(f"Training failed: {type(self.trainer.error).__name__}")
+            messagebox.showerror("Training Error", str(self.trainer.error))
+        else:
+            self.status_var.set(
+                f"Training complete — {self._epochs_done} epochs. "
+                "Go to Phase 4 to evaluate."
+            )
         self.btn_train.configure(state="normal")
         self.btn_stop.configure(state="disabled")
 

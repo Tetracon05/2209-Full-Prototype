@@ -232,7 +232,8 @@ class DataTab(ctk.CTkFrame):
             self.state["corr"] = corr
             self.after(0, self._draw_correlation, corr)
         except Exception as exc:
-            self.after(0, lambda: messagebox.showerror("Correlation Error", str(exc)))
+            err_msg = str(exc)
+            self.after(0, lambda e=err_msg: messagebox.showerror("Correlation Error", e))
         self._set_progress(0.30)
 
         # 3. Lag features
@@ -292,7 +293,7 @@ class DataTab(ctk.CTkFrame):
             try: w.configure(state=state)
             except Exception: pass
 
-    def _set_progress(self, val: float):
+    def _draw_correlation(self, corr):
         """Redraw the correlation bar chart on the embedded figure."""
         self.ax.clear()
         self._style_axes(self.ax)
