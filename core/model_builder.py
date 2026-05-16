@@ -43,9 +43,9 @@ def build_alexnet_1d(input_shape: tuple, output_units: int = 1) -> "tf.keras.Mod
     x = keras.layers.Conv1D(384, 3, padding="same", activation="relu")(x)
     x = keras.layers.Conv1D(256, 3, padding="same", activation="relu")(x)
     x = keras.layers.GlobalAveragePooling1D()(x)
-    x = keras.layers.Dense(4096, activation="relu")(x)
+    x = keras.layers.Dense(128, activation="relu")(x)
     x = keras.layers.Dropout(0.5)(x)
-    x = keras.layers.Dense(4096, activation="relu")(x)
+    x = keras.layers.Dense(128, activation="relu")(x)
     x = keras.layers.Dropout(0.5)(x)
     out = keras.layers.Dense(output_units, activation="linear")(x)
     return keras.Model(inp, out, name="AlexNet1D")
@@ -173,9 +173,9 @@ def build_vgg16_1d(input_shape: tuple, output_units: int = 1) -> "tf.keras.Model
     for _ in range(3):
         x = keras.layers.Conv1D(512, 3, padding="same", activation="relu")(x)
     x = keras.layers.GlobalAveragePooling1D()(x)
-    x = keras.layers.Dense(4096, activation="relu")(x)
+    x = keras.layers.Dense(128, activation="relu")(x)
     x = keras.layers.Dropout(0.5)(x)
-    x = keras.layers.Dense(4096, activation="relu")(x)
+    x = keras.layers.Dense(128, activation="relu")(x)
     x = keras.layers.Dropout(0.5)(x)
     out = keras.layers.Dense(output_units, activation="linear")(x)
     return keras.Model(inp, out, name="VGG16_1D")
@@ -367,10 +367,10 @@ class Trainer:
         self.is_running = True
         self.error = None
 
-        # Reshape: if 2-D input, add timestep dim → (samples, 1, features)
+        # Reshape: if 2-D input, add channel dim → (samples, features, 1)
         if X_train.ndim == 2:
-            X_train = X_train[:, np.newaxis, :]
-            X_val   = X_val[:, np.newaxis, :]
+            X_train = X_train[:, :, np.newaxis]
+            X_val   = X_val[:, :, np.newaxis]
 
         keras = _keras()
 
@@ -388,6 +388,7 @@ class Trainer:
 
         def _run():
             try:
+                self._active_model = model
                 self.history = model.fit(
                     X_train, y_train,
                     validation_data=(X_val, y_val),
@@ -409,9 +410,11 @@ class Trainer:
     def stop(self):
         """Signal the model to stop after the current epoch."""
         self.is_running = False
+        if hasattr(self, "_active_model") and self._active_model is not None:
+            self._active_model.stop_training = True
 
     def predict(self, model, X: np.ndarray) -> np.ndarray:
         """Run inference, reshaping 2-D input if necessary."""
         if X.ndim == 2:
-            X = X[:, np.newaxis, :]
+            X = X[:, :, np.newaxis]
         return model.predict(X, verbose=0).ravel()

@@ -19,6 +19,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from core.model_builder import CustomModelBuilder, Trainer
+from ui.progress_window import ProgressWindow
 
 
 class CustomModelTab(ctk.CTkFrame):
@@ -79,15 +80,12 @@ class CustomModelTab(ctk.CTkFrame):
         self.canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
         self._set_canvas_bg()
 
-        # Status + progress
+        # Status
         self.status_var = ctk.StringVar(value="Add layers and click 'Build & Train'.")
         ctk.CTkLabel(right, textvariable=self.status_var,
                      font=("Segoe UI", 11), anchor="w").grid(
-            row=2, column=0, sticky="ew", padx=10, pady=(0, 2)
+            row=2, column=0, sticky="ew", padx=10, pady=(0, 8)
         )
-        self.progress = ctk.CTkProgressBar(right)
-        self.progress.set(0)
-        self.progress.grid(row=3, column=0, sticky="ew", padx=10, pady=(0, 8))
 
     def _build_designer(self, parent):
         lbl = lambda t, pt=10: ctk.CTkLabel(
@@ -174,12 +172,6 @@ class CustomModelTab(ctk.CTkFrame):
                       command=self._build_and_train)
         self.btn_train.pack(fill="x", padx=4, pady=(16, 2))
         self._inputs.append(self.btn_train)
-
-        self.btn_stop = ctk.CTkButton(parent, text="Stop",
-                      fg_color=("gray40", "gray30"), hover_color=("gray25", "gray15"),
-                      command=self._stop)
-        self.btn_stop.pack(fill="x", padx=4, pady=2)
-        self._inputs.append(self.btn_stop)
 
     # ------------------------------------------------------------------
     # Parameter widget builder helpers
@@ -297,16 +289,9 @@ class CustomModelTab(ctk.CTkFrame):
             app.set_tabs_locked(True)
         self.set_locked(True)
         
-        threading.Thread(target=self._run_training, daemon=True).start()
-
-    def _run_training(self):
-        try:
-            self._do_run_training()
-        finally:
-            self.after(0, lambda: self.set_locked(False))
-            app = self.winfo_toplevel()
-            if hasattr(app, "set_tabs_locked"):
-                self.after(0, lambda: app.set_tabs_locked(False))
+        self.pw = ProgressWindow(app, "Training Custom Model", "Initializing...", self._stop)
+        
+        self._do_run_training()
 
     def _do_run_training(self):
         proc = self.state["processor"]
@@ -318,7 +303,7 @@ class CustomModelTab(ctk.CTkFrame):
         lr = self.lr_var.get() * 1e-4
 
         try:
-            self._model = self.builder.build((1, n_features), lr=lr)
+            self._model = self.builder.build((n_features, 1), lr=lr)
         except Exception as exc:
             self.after(0, lambda: messagebox.showerror("Build Error", str(exc)))
             return
@@ -337,7 +322,11 @@ class CustomModelTab(ctk.CTkFrame):
             self._val_loss.append(logs.get("val_loss", 0))
             frac = (epoch + 1) / total
             self.after(0, self._update_chart)
-            self.after(0, lambda: self.progress.set(frac))
+            
+            if hasattr(self, "pw") and self.pw.winfo_exists():
+                self.after(0, lambda: self.pw.set_progress(frac))
+                self.after(0, lambda: self.pw.set_text(f"Epoch {epoch+1}/{total} — loss={logs.get('loss',0):.5f}"))
+            
             self.after(0, lambda: self.status_var.set(
                 f"Epoch {epoch+1}/{total} — loss={logs.get('loss',0):.5f}"
             ))
@@ -346,7 +335,13 @@ class CustomModelTab(ctk.CTkFrame):
             self.after(0, lambda: self.status_var.set(
                 "Custom model trained. Go to Phase 4 to evaluate."
             ))
-            self.after(0, lambda: self.progress.set(1.0))
+            
+            self.set_locked(False)
+            app = self.winfo_toplevel()
+            if hasattr(app, "set_tabs_locked"):
+                app.set_tabs_locked(False)
+            if hasattr(self, "pw") and self.pw.winfo_exists():
+                self.pw.close()
 
         self.trainer.train(
             self._model, X_tr, y_tr, X_v, y_v,

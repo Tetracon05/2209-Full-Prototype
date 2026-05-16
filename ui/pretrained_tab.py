@@ -20,6 +20,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from core.model_builder import MODEL_REGISTRY, get_model, Trainer
+from ui.progress_window import ProgressWindow
 
 
 class PretrainedTab(ctk.CTkFrame):
@@ -141,15 +142,6 @@ class PretrainedTab(ctk.CTkFrame):
         self.btn_train.pack(fill="x", padx=4, pady=8)
         self._inputs.append(self.btn_train)
 
-        self.btn_stop = ctk.CTkButton(parent, text="Stop",
-                      fg_color=("gray40", "gray30"), hover_color=("gray25", "gray15"),
-                      command=self._stop_training)
-        self.btn_stop.pack(fill="x", padx=4)
-
-        self.progress = ctk.CTkProgressBar(parent)
-        self.progress.set(0)
-        self.progress.pack(fill="x", padx=4, pady=6)
-
         lbl("Epoch Stats")
         self.stats_box = ctk.CTkTextbox(parent, height=80, state="disabled",
                                          font=("Courier New", 9))
@@ -166,7 +158,7 @@ class PretrainedTab(ctk.CTkFrame):
         try:
             proc = self.state["processor"]
             n_features = len(proc.feature_cols)
-            model = get_model(self.model_var.get(), (1, n_features))
+            model = get_model(self.model_var.get(), (n_features, 1))
             lines = []
             model.summary(print_fn=lambda s: lines.append(s))
             text = "\n".join(lines)
@@ -186,17 +178,10 @@ class PretrainedTab(ctk.CTkFrame):
         if hasattr(app, "set_tabs_locked"):
             app.set_tabs_locked(True)
         self.set_locked(True)
+        
+        self.pw = ProgressWindow(app, "Training Model", "Initializing...", self._stop_training)
             
-        threading.Thread(target=self._run_training, daemon=True).start()
-
-    def _run_training(self):
-        try:
-            self._do_run_training()
-        finally:
-            self.after(0, lambda: self.set_locked(False))
-            app = self.winfo_toplevel()
-            if hasattr(app, "set_tabs_locked"):
-                self.after(0, lambda: app.set_tabs_locked(False))
+        self._do_run_training()
 
     def _do_run_training(self):
         proc = self.state["processor"]
@@ -208,7 +193,7 @@ class PretrainedTab(ctk.CTkFrame):
         lr = self.lr_var.get() * 1e-4
 
         try:
-            self._model = get_model(self.model_var.get(), (1, n_features))
+            self._model = get_model(self.model_var.get(), (n_features, 1))
         except Exception as exc:
             messagebox.showerror("Model Error", str(exc))
             return
@@ -222,7 +207,6 @@ class PretrainedTab(ctk.CTkFrame):
         total = self.epochs_var.get()
 
         self.btn_train.configure(state="disabled")
-        self.btn_stop.configure(state="normal")
         self.status_var.set("Training…")
 
         def on_epoch(epoch, logs):
@@ -234,7 +218,11 @@ class PretrainedTab(ctk.CTkFrame):
                      f"  loss    = {logs.get('loss', 0):.6f}\n"
                      f"  val_loss= {logs.get('val_loss', 0):.6f}")
             self.after(0, self._update_chart)
-            self.after(0, lambda: self.progress.set(frac))
+            
+            if hasattr(self, "pw") and self.pw.winfo_exists():
+                self.after(0, lambda: self.pw.set_progress(frac))
+                self.after(0, lambda: self.pw.set_text(f"Epoch {self._epochs_done}/{total}"))
+            
             self.after(0, self._update_stats, stats)
 
         def on_done(history):
@@ -252,10 +240,15 @@ class PretrainedTab(ctk.CTkFrame):
         self.trainer.stop()
         self.status_var.set("Stopped by user.")
         self.btn_train.configure(state="normal")
-        self.btn_stop.configure(state="disabled")
 
     def _training_finished(self):
-        self.progress.set(1.0)
+        self.set_locked(False)
+        app = self.winfo_toplevel()
+        if hasattr(app, "set_tabs_locked"):
+            app.set_tabs_locked(False)
+        if hasattr(self, "pw") and self.pw.winfo_exists():
+            self.pw.close()
+            
         if hasattr(self.trainer, "error") and self.trainer.error:
             self.status_var.set(f"Training failed: {type(self.trainer.error).__name__}")
             messagebox.showerror("Training Error", str(self.trainer.error))
@@ -265,7 +258,6 @@ class PretrainedTab(ctk.CTkFrame):
                 "Go to Phase 4 to evaluate."
             )
         self.btn_train.configure(state="normal")
-        self.btn_stop.configure(state="disabled")
 
     # ------------------------------------------------------------------
     # Helpers

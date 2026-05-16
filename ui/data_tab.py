@@ -10,6 +10,8 @@ Responsibilities:
 """
 
 import threading
+import multiprocessing
+import queue
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
@@ -22,6 +24,15 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from core.data_processor import DataProcessor
 from core.decomposition import decompose
+from ui.progress_window import ProgressWindow
+
+def _decompose_worker(q, signal, method, n_components):
+    try:
+        from core.decomposition import decompose
+        res = decompose(signal, method=method, n_components=n_components)
+        q.put(("success", res))
+    except Exception as e:
+        q.put(("error", e))
 
 
 class DataTab(ctk.CTkFrame):
@@ -170,10 +181,6 @@ class DataTab(ctk.CTkFrame):
         btn_action.pack(fill="x", padx=4, pady=(18, 4))
         self._inputs.append(btn_action)
 
-        self.progress = ctk.CTkProgressBar(parent)
-        self.progress.set(0)
-        self.progress.pack(fill="x", padx=4, pady=4)
-
     # ------------------------------------------------------------------
     # Actions
     # ------------------------------------------------------------------
@@ -205,7 +212,14 @@ class DataTab(ctk.CTkFrame):
             app.set_tabs_locked(True)
         self.set_locked(True)
         
+        self._abort_flag = False
+        self.pw = ProgressWindow(self.winfo_toplevel(), "Data Processing", "Starting pipeline...", self._abort_pipeline)
+        
         threading.Thread(target=self._run_pipeline, daemon=True).start()
+
+    def _abort_pipeline(self):
+        self._abort_flag = True
+        self.status_var.set("Data processing aborted.")
 
     def _run_pipeline(self):
         """Full processing pipeline executed in a background thread."""
@@ -216,17 +230,18 @@ class DataTab(ctk.CTkFrame):
             app = self.winfo_toplevel()
             if hasattr(app, "set_tabs_locked"):
                 self.after(0, lambda: app.set_tabs_locked(False))
+            if hasattr(self, "pw") and self.pw.winfo_exists():
+                self.after(0, self.pw.close)
 
     def _do_run_pipeline(self):
-        self._set_progress(0.05)
-        self.status_var.set("Cleaning data…")
+        self._set_progress(0.05, "Cleaning data…")
 
         # 1. Clean
         n = self.processor.clean(self.clean_var.get())
-        self._set_progress(0.15)
+        if self._abort_flag: return
+        self._set_progress(0.15, "Computing correlations…")
 
         # 2. Correlation + chart
-        self.status_var.set("Computing correlations…")
         try:
             corr = self.processor.compute_correlation(self.topn_var.get())
             self.state["corr"] = corr
@@ -234,42 +249,84 @@ class DataTab(ctk.CTkFrame):
         except Exception as exc:
             err_msg = str(exc)
             self.after(0, lambda e=err_msg: messagebox.showerror("Correlation Error", e))
-        self._set_progress(0.30)
+        
+        if self._abort_flag: return
+        self._set_progress(0.30, "Adding lag features…")
 
         # 3. Lag features
         if self.lag_var.get() > 0:
-            self.status_var.set("Adding lag features…")
             lags = list(range(1, self.lag_var.get() + 1))
             top_cols = list(self.state["corr"].index) if "corr" in self.state else []
             self.processor.add_lag_features(top_cols, lags)
-        self._set_progress(0.45)
+        
+        if self._abort_flag: return
 
         # 4. Decomposition
         method = self.decomp_var.get()
         if method != "None":
-            self.status_var.set(f"Decomposing signal with {method}…")
+            self._set_progress(0.45, f"Decomposing signal with {method}…")
             try:
                 signal = self.processor.df["Active_Power"].values
-                imfs = decompose(signal, method=method, n_components=self.imf_var.get())
+                n_components = self.imf_var.get()
+                
+                ctx = multiprocessing.get_context("spawn")
+                q = ctx.Queue()
+                p = ctx.Process(target=_decompose_worker, args=(q, signal, method, n_components))
+                p.start()
+                
+                res_tuple = None
+                while True:
+                    if self._abort_flag:
+                        p.terminate()
+                        p.join()
+                        return
+                        
+                    try:
+                        res_tuple = q.get(timeout=0.1)
+                        break
+                    except queue.Empty:
+                        if not p.is_alive():
+                            try:
+                                res_tuple = q.get(timeout=0.1)
+                            except queue.Empty:
+                                pass
+                            break
+                            
+                p.join()
+                
+                if res_tuple is not None:
+                    status, res = res_tuple
+                    if status == "success":
+                        imfs = res
+                    else:
+                        raise res
+                else:
+                    raise RuntimeError("Decomposition process failed unexpectedly.")
+                    
                 self.processor.add_imf_features(imfs, prefix=method)
             except Exception as exc:
                 self.after(0, lambda e=exc: messagebox.showerror(
                     "Decomposition Error", str(e)))
-        self._set_progress(0.70)
+        
+        if self._abort_flag: return
+        self._set_progress(0.70, "Applying augmentations…")
 
         # 4.5 Circshift
         c_steps = self.circshift_var.get()
         if c_steps > 0:
-            self.status_var.set(f"Applying Circshift Augmentation ({c_steps} steps)…")
             self.processor.add_circshift_augmentation(c_steps)
 
+        if self._abort_flag: return
+        self._set_progress(0.85, "Splitting dataset (70/15/15)…")
+
         # 5. Split
-        self.status_var.set("Splitting dataset (70/15/15)…")
         horizon = self.horizon_var.get()
         info = self.processor.split(horizon=horizon)
         self.state["split_info"] = info
         self.state["data_ready"] = True
-        self._set_progress(1.0)
+        self._set_progress(1.0, "Done!")
+
+        if self._abort_flag: return
 
         # 6. Update info
         lines = [
@@ -280,9 +337,9 @@ class DataTab(ctk.CTkFrame):
             f"Test  samples : {info['test']:,}",
         ]
         self.after(0, lambda: self._append_info("\n".join(lines)))
-        self.status_var.set(
+        self.after(0, lambda: self.status_var.set(
             f"Done — {info['train']+info['val']+info['test']:,} samples ready."
-        )
+        ))
 
     # ------------------------------------------------------------------
     # Helpers
@@ -309,8 +366,13 @@ class DataTab(ctk.CTkFrame):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
-    def _set_progress(self, val: float):
-        self.after(0, lambda: self.progress.set(val))
+    def _set_progress(self, val: float, text: str = None):
+        if text:
+            self.after(0, lambda: self.status_var.set(text))
+            if hasattr(self, "pw") and self.pw.winfo_exists():
+                self.after(0, lambda: self.pw.set_text(text))
+        if hasattr(self, "pw") and self.pw.winfo_exists():
+            self.after(0, lambda: self.pw.set_progress(val))
 
     def _update_info(self, summary: dict):
         text = (
