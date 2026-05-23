@@ -47,3 +47,6 @@ Uygulama temel olarak dört aşamadan oluşmaktadır:
 * Pandas, NumPy, Scikit-learn
 * Matplotlib
 * PyEMD, vmdpy (sinyal ayrıştırma için)
+
+## Ornek ciktilar asagidaki linkte.
+https://drive.google.com/drive/folders/1K3n-pZ5do3dP1j4_niZLGN262e-Swh7R?usp=sharing
