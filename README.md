@@ -48,5 +48,11 @@ Uygulama temel olarak dört aşamadan oluşmaktadır:
 * Matplotlib
 * PyEMD, vmdpy (sinyal ayrıştırma için)
 
-## Ornek ciktilar asagidaki linkte.
-https://drive.google.com/drive/folders/1K3n-pZ5do3dP1j4_niZLGN262e-Swh7R?usp=sharing
+## Örnek Çıktılar
+* [Örnek Çıktılar (Google Drive)](https://drive.google.com/drive/folders/1K3n-pZ5do3dP1j4_niZLGN262e-Swh7R?usp=sharing)
+
+## Son Güncellemeler ve Performans Analizi
+* **Hata Metriği İyileştirmesi:** Güneş enerjisi üretimindeki "gece/alacakaranlık" saatlerinde oluşan (üretimin sıfıra yakın olduğu anlarda) aşırı yüksek yüzdelik sapmaları engellemek için değerlendirme modülünde MAPE yerine **sMAPE** (Symmetric Mean Absolute Percentage Error) kullanıldı. Anlamlı hesaplama için sadece `> 5.0 W` üretim anları değerlendirmeye alındı.
+* **Model Performansları (VMD ile Ayrıştırılmış Veri):**
+  * **GoogLeNet-1D (Pre-Trained):** En iyi genel performans (R: `0.9780`, MAE: `15.05`, sMAPE: `%16.40`).
+  * **Kombinasyon 2 (Custom Arch):** En iyi Mutlak Ortalama Hata performansı (R: `0.9756`, MAE: `14.82`, sMAPE: `%19.85`).
