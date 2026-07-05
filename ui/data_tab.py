@@ -4,7 +4,7 @@ data_tab.py — Phase 1: Data Management & Decomposition panel.
 Responsibilities:
   • Load CSV, display dataset summary
   • Show correlation bar chart (FigureCanvasTkAgg)
-  • Select & apply decomposition method (VMD/EMD/EEMD/CEEMDAN)
+  • Select & apply decomposition method (CEEMDAN/VMD)
   • Configure and execute 70/15/15 split
   • All heavy work runs in background threads to keep UI responsive
 """
@@ -158,8 +158,8 @@ class DataTab(ctk.CTkFrame):
 
         # Section: Decomposition
         lbl("Decomposition Method")
-        self.decomp_var = ctk.StringVar(value="EMD")
-        menu_decomp = ctk.CTkOptionMenu(parent, values=["None", "EMD", "EEMD", "CEEMDAN", "VMD"],
+        self.decomp_var = ctk.StringVar(value="None")
+        menu_decomp = ctk.CTkOptionMenu(parent, values=["None", "CEEMDAN", "VMD"],
                           variable=self.decomp_var)
         menu_decomp.pack(fill="x", padx=4, pady=2)
         self._inputs.append(menu_decomp)
@@ -356,9 +356,9 @@ class DataTab(ctk.CTkFrame):
         self._style_axes(self.ax)
         colors_ = ["#757575" if v >= 0 else "#424242" for v in corr.values]
         self.ax.barh(corr.index[::-1], corr.values[::-1], color=colors_[::-1])
-        self.ax.set_xlabel("Absolute Correlation with Active_Power",
+        self.ax.set_xlabel("Absolute Correlation (Dimensionless [-1, 1])",
                            color="#7f7f7f", fontsize=9)
-        self.ax.set_ylabel("Features", color="#7f7f7f", fontsize=9)
+        self.ax.set_ylabel("Features (Variable Names)", color="#7f7f7f", fontsize=9)
         self.ax.set_title("Feature Correlation", color="#7f7f7f", fontsize=10, pad=8)
         self.fig.tight_layout()
         self.canvas.draw()

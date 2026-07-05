@@ -4,7 +4,7 @@ evaluation_tab.py — Phase 4: Evaluation & Reporting panel.
 Responsibilities:
   • Run inference on the test set using the trained model
   • Plot Actual vs Predicted line chart (FigureCanvasTkAgg)
-  • Display R, RMSE, MAE, MAPE metric cards
+  • Display R, RMSE, MAE, sMAPE metric cards
   • Export results as CSV or PDF report
 """
 
@@ -78,7 +78,7 @@ class EvaluationTab(ctk.CTkFrame):
         cards.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
         self._metric_labels = {}
-        for col, name in enumerate(["R", "RMSE", "MAE", "MAPE"]):
+        for col, name in enumerate(["R", "RMSE", "MAE", "sMAPE"]):
             card = ctk.CTkFrame(cards, corner_radius=10,
                                 fg_color=("gray90", "#242424"),
                                 border_color=("gray70", "#4d4d4d"), border_width=1)
@@ -185,7 +185,7 @@ class EvaluationTab(ctk.CTkFrame):
 
         # Update metric cards
         for name, val in self._metrics.items():
-            suffix = "%" if name == "MAPE" else ""
+            suffix = "%" if name == "sMAPE" else ""
             self._metric_labels[name].configure(text=f"{val:.4f}{suffix}")
 
         # Draw chart
@@ -196,7 +196,7 @@ class EvaluationTab(ctk.CTkFrame):
             f"{model_name} — R={self._metrics['R']:.4f}  "
             f"RMSE={self._metrics['RMSE']:.4f}  "
             f"MAE={self._metrics['MAE']:.4f}  "
-            f"MAPE={self._metrics['MAPE']:.2f}%"
+            f"sMAPE={self._metrics['sMAPE']:.2f}%"
         )
 
     def _redraw_chart(self):
@@ -213,8 +213,8 @@ class EvaluationTab(ctk.CTkFrame):
                       label="Actual",    alpha=0.9)
         self._ax.plot(xs, yp, color="#757575", linewidth=1.0,
                       label="Predicted", alpha=0.9, linestyle="--")
-        self._ax.set_xlabel("Time Step", color="#7f7f7f", fontsize=9)
-        self._ax.set_ylabel("Active Power (W)", color="#7f7f7f", fontsize=9)
+        self._ax.set_xlabel("Time Step (5-Min Intervals)", color="#7f7f7f", fontsize=9)
+        self._ax.set_ylabel("Active Power (Watts)", color="#7f7f7f", fontsize=9)
         self._ax.set_title("Actual vs Predicted Power Output",
                            color="#7f7f7f", fontsize=11)
         self._ax.legend(facecolor="#2b2b2b", edgecolor="#7f7f7f",

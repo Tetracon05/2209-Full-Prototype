@@ -7,7 +7,7 @@ import numpy as np
 
 def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
     """
-    Compute R (Pearson correlation), RMSE, MAE, and MAPE between
+    Compute R (Pearson correlation), RMSE, MAE, and sMAPE between
     ground-truth and predicted arrays.
 
     Parameters
@@ -17,10 +17,10 @@ def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
 
     Returns
     -------
-    dict with keys: R, RMSE, MAE, MAPE
+    dict with keys: R, RMSE, MAE, sMAPE
     """
     y_true = np.asarray(y_true, dtype=np.float64).ravel()
-    y_pred = np.asarray(y_pred, dtype=np.float64).ravel()
+    y_pred = np.clip(np.asarray(y_pred, dtype=np.float64).ravel(), a_min=0, a_max=None)
 
     # Pearson correlation coefficient
     if np.std(y_true) == 0 or np.std(y_pred) == 0:
@@ -34,11 +34,14 @@ def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
     # Mean Absolute Error
     mae = float(np.mean(np.abs(y_true - y_pred)))
 
-    # Mean Absolute Percentage Error (avoid division by zero)
-    mask = y_true != 0
+    # Symmetric Mean Absolute Percentage Error (avoid division by near-zero)
+    # Güneş paneli verilerinde sıfıra yakın (gece/alacakaranlık) değerlerdeki 
+    # %200'lük sapmaları önlemek için sadece belirli bir eşik üzerindeki değerler alınır.
+    mask = y_true > 5.0
     if mask.sum() == 0:
-        mape = float("nan")
+        smape = float("nan")
     else:
-        mape = float(np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100)
+        denominator = np.abs(y_true[mask]) + np.abs(y_pred[mask])
+        smape = float(np.mean(2.0 * np.abs(y_true[mask] - y_pred[mask]) / denominator) * 100)
 
-    return {"R": r, "RMSE": rmse, "MAE": mae, "MAPE": mape}
+    return {"R": r, "RMSE": rmse, "MAE": mae, "sMAPE": smape}

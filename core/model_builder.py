@@ -82,35 +82,6 @@ def build_googlenet_1d(input_shape: tuple, output_units: int = 1) -> "tf.keras.M
     return keras.Model(inp, out, name="GoogLeNet1D")
 
 
-def build_shufflenet_1d(input_shape: tuple, output_units: int = 1) -> "tf.keras.Model":
-    """
-    1-D ShuffleNet-style adaptation using depthwise separable Conv1D blocks.
-    """
-    keras = _keras()
-
-    def shuffle_block(x, filters, strides=1):
-        # Depthwise separable convolution as approximation of channel shuffle
-        x = keras.layers.SeparableConv1D(filters, 3, strides=strides,
-                                         padding="same", activation="relu")(x)
-        x = keras.layers.BatchNormalization()(x)
-        return x
-
-    inp = keras.Input(shape=input_shape)
-    x = keras.layers.Conv1D(24, 3, strides=2, padding="same", activation="relu")(inp)
-    x = keras.layers.MaxPooling1D(3, strides=2, padding="same")(x)
-    for filters in [116, 116, 116, 116]:
-        x = shuffle_block(x, filters)
-    x = shuffle_block(x, 232, strides=2)
-    for filters in [232, 232, 232, 232, 232, 232, 232]:
-        x = shuffle_block(x, filters)
-    x = shuffle_block(x, 464, strides=2)
-    for filters in [464, 464, 464]:
-        x = shuffle_block(x, filters)
-    x = keras.layers.GlobalAveragePooling1D()(x)
-    out = keras.layers.Dense(output_units, activation="linear")(x)
-    return keras.Model(inp, out, name="ShuffleNet1D")
-
-
 def build_resnet_1d(input_shape: tuple, output_units: int = 1) -> "tf.keras.Model":
     """
     1-D ResNet-18 adaptation with residual Conv1D blocks.
@@ -146,82 +117,13 @@ def build_resnet_1d(input_shape: tuple, output_units: int = 1) -> "tf.keras.Mode
     return keras.Model(inp, out, name="ResNet1D")
 
 
-def build_vgg16_1d(input_shape: tuple, output_units: int = 1) -> "tf.keras.Model":
-    """
-    1-D VGG-16 adaptation — two-block Conv1D groups followed by Dense head.
-    """
-    keras = _keras()
-    inp = keras.Input(shape=input_shape)
-    x = inp
-    # Block 1
-    x = keras.layers.Conv1D(64, 3, padding="same", activation="relu")(x)
-    x = keras.layers.Conv1D(64, 3, padding="same", activation="relu")(x)
-    x = keras.layers.MaxPooling1D(2, padding="same")(x)
-    # Block 2
-    x = keras.layers.Conv1D(128, 3, padding="same", activation="relu")(x)
-    x = keras.layers.Conv1D(128, 3, padding="same", activation="relu")(x)
-    x = keras.layers.MaxPooling1D(2, padding="same")(x)
-    # Block 3
-    for _ in range(3):
-        x = keras.layers.Conv1D(256, 3, padding="same", activation="relu")(x)
-    x = keras.layers.MaxPooling1D(2, padding="same")(x)
-    # Block 4
-    for _ in range(3):
-        x = keras.layers.Conv1D(512, 3, padding="same", activation="relu")(x)
-    x = keras.layers.MaxPooling1D(2, padding="same")(x)
-    # Block 5
-    for _ in range(3):
-        x = keras.layers.Conv1D(512, 3, padding="same", activation="relu")(x)
-    x = keras.layers.GlobalAveragePooling1D()(x)
-    x = keras.layers.Dense(128, activation="relu")(x)
-    x = keras.layers.Dropout(0.5)(x)
-    x = keras.layers.Dense(128, activation="relu")(x)
-    x = keras.layers.Dropout(0.5)(x)
-    out = keras.layers.Dense(output_units, activation="linear")(x)
-    return keras.Model(inp, out, name="VGG16_1D")
-
-
-def build_squeezenet_1d(input_shape: tuple, output_units: int = 1) -> "tf.keras.Model":
-    """
-    1-D SqueezeNet adaptation — fire modules with Conv1D squeeze/expand layers.
-    """
-    keras = _keras()
-
-    def fire_module(x, squeeze, expand):
-        sq  = keras.layers.Conv1D(squeeze, 1, activation="relu", padding="same")(x)
-        ex1 = keras.layers.Conv1D(expand,  1, activation="relu", padding="same")(sq)
-        ex3 = keras.layers.Conv1D(expand,  3, activation="relu", padding="same")(sq)
-        return keras.layers.Concatenate()([ex1, ex3])
-
-    inp = keras.Input(shape=input_shape)
-    x = keras.layers.Conv1D(96, 7, strides=2, padding="same", activation="relu")(inp)
-    x = keras.layers.MaxPooling1D(3, strides=2, padding="same")(x)
-    x = fire_module(x, 16, 64)
-    x = fire_module(x, 16, 64)
-    x = fire_module(x, 32, 128)
-    x = keras.layers.MaxPooling1D(3, strides=2, padding="same")(x)
-    x = fire_module(x, 32, 128)
-    x = fire_module(x, 48, 192)
-    x = fire_module(x, 48, 192)
-    x = fire_module(x, 64, 256)
-    x = keras.layers.MaxPooling1D(3, strides=2, padding="same")(x)
-    x = fire_module(x, 64, 256)
-    x = keras.layers.Dropout(0.5)(x)
-    x = keras.layers.Conv1D(output_units, 1, padding="same")(x)
-    x = keras.layers.GlobalAveragePooling1D()(x)
-    return keras.Model(inp, x, name="SqueezeNet1D")
-
-
 # ---------------------------------------------------------------------------
 # Model registry
 # ---------------------------------------------------------------------------
 MODEL_REGISTRY = {
     "AlexNet":    build_alexnet_1d,
     "GoogLeNet":  build_googlenet_1d,
-    "ShuffleNet": build_shufflenet_1d,
     "ResNet":     build_resnet_1d,
-    "VGG-16":     build_vgg16_1d,
-    "SqueezeNet": build_squeezenet_1d,
 }
 
 

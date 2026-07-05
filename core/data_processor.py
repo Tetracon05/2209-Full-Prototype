@@ -220,7 +220,7 @@ class DataProcessor:
             df_work.dropna(subset=[target_name], inplace=True)
 
         X = df_work[self.feature_cols].values.astype(np.float32)
-        y = df_work[target_name].values.astype(np.float32).reshape(-1, 1)
+        y = np.clip(df_work[target_name].values.astype(np.float32), a_min=0, a_max=None).reshape(-1, 1)
 
         n = len(X)
         i_train = int(n * train_ratio)

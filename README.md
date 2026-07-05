@@ -24,7 +24,7 @@ Uygulama temel olarak dört aşamadan oluşmaktadır:
 
 *   **4. Aşama: Değerlendirme ve Raporlama**
     *   Eğitilen modellerin test veri seti üzerinde değerlendirilmesi.
-    *   Temel performans metriklerinin (R, RMSE, MAE, MAPE) hesaplanması.
+    *   Temel performans metriklerinin (R, RMSE, MAE, sMAPE) hesaplanması.
     *   Gerçekleşen ve tahmin edilen güç üretiminin grafiksel karşılaştırması.
     *   Sonuçların CSV veya PDF raporu olarak dışa aktarılması.
 

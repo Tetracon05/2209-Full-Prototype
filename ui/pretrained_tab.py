@@ -270,8 +270,8 @@ class PretrainedTab(ctk.CTkFrame):
         if self._val_loss:
             self.ax.plot(e, self._val_loss, label="Val Loss", color="#757575", linewidth=1.5)
             
-        self.ax.set_xlabel("Epoch", color="#7f7f7f", fontsize=9)
-        self.ax.set_ylabel("Loss (MSE)", color="#7f7f7f", fontsize=9)
+        self.ax.set_xlabel("Epoch (Iteration Count)", color="#7f7f7f", fontsize=9)
+        self.ax.set_ylabel("Loss (MSE in Scaled Units [0,1])", color="#7f7f7f", fontsize=9)
         self.ax.set_title("Training Progress", color="#7f7f7f", fontsize=10, pad=8)
         self.ax.legend(facecolor="#2b2b2b", edgecolor="#7f7f7f",
                        labelcolor="#e0e0e0", fontsize=8)
