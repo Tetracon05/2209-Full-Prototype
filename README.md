@@ -9,12 +9,12 @@ Uygulama temel olarak dört aşamadan oluşmaktadır:
 *   **1. Aşama: Veri Yönetimi ve Ayrıştırma**
     *   Zaman serisi CSV veri setlerini yükleme ve temizleme.
     *   Özelliklerin hedef (Aktif Güç) ile olan korelasyonlarını hesaplama.
-    *   Gelişmiş sinyal ayrıştırma (EMD, EEMD, CEEMDAN, VMD) algoritmaları.
+    *   Gelişmiş sinyal ayrıştırma (CEEMDAN, VMD) algoritmaları.
     *   Gecikmeli (lag) özellikler oluşturma ve veriyi bölme.
 
 *   **2. Aşama: Ön-Eğitimli Modeller**
     *   1D Evrişimli Sinir Ağları (CNN) kullanarak tablo verisi formatında eğitim.
-    *   Desteklenen mimariler: AlexNet-1D, GoogLeNet-1D, ResNet-1D, VGG16-1D, SqueezeNet-1D, ShuffleNet-1D.
+    *   Desteklenen mimariler: AlexNet-1D, GoogLeNet-1D, ResNet-1D.
     *   Gerçek zamanlı eğitim ilerlemesi ve kayıp (loss) grafiği çizimi.
 
 *   **3. Aşama: Özel Model Tasarımcısı**
